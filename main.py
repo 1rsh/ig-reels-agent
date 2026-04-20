@@ -21,7 +21,7 @@ async def _main():
         reel = await agent.current_reel()
         logger.info(f"Current reel: {reel}")
 
-        for i in range(100):
+        for i in range(5):
             reel = await reel.seek_next()
             logger.info(f"Reel under consideration: {reel}")
 
@@ -31,7 +31,7 @@ async def _main():
             # should be in a different tab here, but just in case, bring idle tab to front so we don't accumulate watch time while deciding
             await agent._idle_page.bring_to_front()
 
-            result = evaluate_video(path)
+            result = await evaluate_video(path)
 
             to_play = result.get("verdict", "BORDERLINE")
 
