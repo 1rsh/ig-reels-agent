@@ -42,8 +42,8 @@ class VideoCaptioningModel:
 
       Your analysis should include each of these parameters
       """
-
-  def generate_caption(self, video):
+    
+  def make_messages(self, video):
     question = "What is in the video?"
 
     messages = [
@@ -54,8 +54,12 @@ class VideoCaptioningModel:
               {"type": "text", "text": question}
             ]
         }
-
     ]
+  
+    return messages
+
+  def generate_caption(self, video):
+    messages = self.make_messages(video)
 
     text = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     image_inputs, video_inputs, video_kwargs = process_vision_info(messages, return_video_kwargs=True)
@@ -79,10 +83,9 @@ class VideoCaptioningModel:
         clean_up_tokenization_spaces=False
     )
 
-    del image_inputs, video_inputs, video_kwargs, inputs, generated_ids, generated_ids_trimmed
+    del messages, text, image_inputs, video_inputs, video_kwargs, inputs, generated_ids, generated_ids_trimmed
     return output_text[0]
-
-
+  
 
 class ContentLevel(str, Enum):
     SAFE = "SAFE"
@@ -249,21 +252,17 @@ async def run_llm_pipeline(video_description: str) -> dict:
     }
 
 
-video_captioning_model = VideoCaptioningModel()
-
-async def pipeline(video_path):
+async def pipeline(video_captioning_model, video_path):
   video_description = video_captioning_model.generate_caption(video_path)
   result = await run_llm_pipeline(video_description)
   return result
 
-
-
-async def evaluate_video(path):
-    logger.info(f"Evaluating video at {path} using external classifier...")
+async def classify_video(video_captioning_model, video_path):
+    logger.info(f"Evaluating video at {video_path} using external classifier...")
     start = time.time()
 
     try:
-        result = await pipeline(path)
+        result = await pipeline(video_captioning_model, video_path)
         duration = time.time() - start
         logger.info(f"Classification completed in {duration:.2f} seconds.")
         return result['final'].model_dump()

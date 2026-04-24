@@ -6,7 +6,7 @@ import json
 
 from reels_agent import ReelsAgent, save_session, SESSION_FILE
 from logger import logger
-from classifier import evaluate_video
+from classifier import classify_video
 
 
 async def _main():
@@ -31,7 +31,7 @@ async def _main():
             # should be in a different tab here, but just in case, bring idle tab to front so we don't accumulate watch time while deciding
             await agent._idle_page.bring_to_front()
 
-            result = await evaluate_video(path)
+            result = await classify_video(path)
 
             to_play = result.get("verdict", "BORDERLINE")
 
