@@ -14,6 +14,7 @@ from logger import logger
 
 QWEN_DEVICE = "mps"
 
+# Video Captioning
 class VideoCaptioningModel:
   def __init__(self):
     self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
@@ -25,23 +26,24 @@ class VideoCaptioningModel:
       low_cpu_mem_usage=True
     )
 
-
     self.processor = AutoProcessor.from_pretrained("Qwen/Qwen2.5-VL-3B-Instruct")
 
     self.SYSTEM_PROMPT = """
-      You are a forensic video analyst specializing in sexual content detection. You describe what you see in tremendous detail. Also, you perform structured analysis of visual cues that signal sexual content. mention each and every small detail (whether it be redundant or not useful)
+        You are a forensic video analyst specializing in sexual content detection. You describe what you see in tremendous detail. Also, you perform structured analysis of visual cues that signal sexual content. mention each and every small detail (whether it be redundant or not useful)
 
-      For EACH distinct scene in the video, analyze these 5 dimensions and score each 0-5:
+        For EACH distinct scene in the video, analyze these 5 dimensions and score each 0-5:
 
-      1. BODY LANGUAGE & POSTURE
-      2. CLOTHING & APPEARANCE
-      3. SETTING & PROPS
-      4. PHYSICAL INTERACTION (if multiple people)
-      5. TEXT & AUDIO CUES (if visible/audible)
-      6. EXPLICIT CONTENT ANALYSIS (NUDITY/PENETRATION)
+        1. BODY LANGUAGE & POSTURE
+        2. CLOTHING & APPEARANCE
+        3. SETTING & PROPS
+        4. PHYSICAL INTERACTION (if multiple people)
+        5. TEXT & AUDIO CUES (if visible/audible)
+        6. EXPLICIT CONTENT ANALYSIS (NUDITY/PENETRATION)
 
-      Your analysis should include each of these parameters
-      """
+        Your analysis should include each of these parameters
+    """
+    
+    self.video_fps = 6
     
   def make_messages(self, video):
     question = "What is in the video?"
@@ -50,7 +52,7 @@ class VideoCaptioningModel:
         {"role": "system", "content": self.SYSTEM_PROMPT},
         {
             "role": "user", "content": [
-              {"type": "video", "video": video, "max_pixels": 240 * 135, "fps": 6, "min_pixels": 160 * 90},
+              {"type": "video", "video": video, "max_pixels": 160 * 90, "fps": self.video_fps, "min_pixels": 160 * 90},
               {"type": "text", "text": question}
             ]
         }
@@ -73,7 +75,13 @@ class VideoCaptioningModel:
     )
     inputs = inputs.to(QWEN_DEVICE)
 
-    generated_ids = self.model.generate(**inputs, max_new_tokens=512)
+    generated_ids = self.model.generate(
+       **inputs, 
+       max_new_tokens=384,
+       do_sample=False,
+       use_cache=True,
+    )
+    
     generated_ids_trimmed = [
         out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
     ]
@@ -85,6 +93,46 @@ class VideoCaptioningModel:
 
     del messages, text, image_inputs, video_inputs, video_kwargs, inputs, generated_ids, generated_ids_trimmed
     return output_text[0]
+  
+
+
+class FewShotVideoCaptioningModel(VideoCaptioningModel):
+    def __init__(self):
+        super().__init__()
+        self.few_shot_examples = [
+            {
+                "type": "video",
+                "video": "few_shot_examples/safe.mp4",
+                "max_pixels": 120 * 65, "fps": 1, "min_pixels": 100 * 60,
+            },
+            {"type": "text", "text": "A person is walking their kid dressed in a duck costume down the beach."},
+            {
+                "type": "video",
+                "video": "few_shot_examples/implicit.mp4",
+                "max_pixels": 120 * 65, "fps": 1, "min_pixels": 100 * 60,
+            },
+            {"type": "text", "text": "A rod is being inserted into a hole before and after applying oil (implied penetration)."},
+        ]
+    
+    def make_messages(self, video):
+        question = "What is in the video?"
+
+        messages = [
+            {"role": "system", "content": [
+                    {"type": "text", "text": self.SYSTEM_PROMPT},
+                    {"type": "text", "text": "Here are two examples of videos and their captions:"},
+                    *self.few_shot_examples,
+                ]
+            },
+            {
+                "role": "user", "content": [
+                    {"type": "video", "video": video, "max_pixels": 240 * 135, "fps": self.video_fps, "min_pixels": 160 * 90},
+                    {"type": "text", "text": question}
+                ]
+            }
+        ]
+    
+        return messages
   
 
 class ContentLevel(str, Enum):
