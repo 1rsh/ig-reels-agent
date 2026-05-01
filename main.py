@@ -6,10 +6,16 @@ import json
 
 from reels_agent import ReelsAgent, save_session, SESSION_FILE
 from logger import logger
-from classifier import classify_video
+from classifier import classify_video, VideoCaptioningModel
 
+WAIT_FOR_SECONDS = 10
+MAX_REELS = 20
 
 async def _main():
+    logger.info("Initializing video captioning model...")
+    video_captioning_model = VideoCaptioningModel()
+    video_captioning_model.video_fps = 4
+
     if os.path.exists(SESSION_FILE):
         logger.debug(f"Using existing session file: {SESSION_FILE}")
     else:
